@@ -93,14 +93,12 @@ export default function RecipeChat() {
 
   const handleKeyDown = (e) => {
     if (e.key === " ") {
-      const trimmed = inputText.trim();
-      if (trimmed.startsWith("//")) {
+      const lastWord = inputText.split(" ").pop();
+      if (lastWord.startsWith("//") && lastWord.length > 2) {
         e.preventDefault();
-        const tagLabel = trimmed.slice(2).trim();
-        if (tagLabel) {
-          setTags((prev) => [...prev, tagLabel]);
-          setInputText("");
-        }
+        const tagLabel = lastWord.slice(2);
+        setTags((prev) => [...prev, tagLabel]);
+        setInputText(inputText.slice(0, inputText.length - lastWord.length).trimStart());
       }
     } else if (e.key === "Backspace" && inputText === "" && tags.length > 0) {
       setTags((prev) => prev.slice(0, -1));
@@ -127,13 +125,24 @@ export default function RecipeChat() {
   const handleSend = () => {
     if (!canSend) return;
 
-    const finalTags = inputText.trim()
-      ? [...tags, inputText.trim()]
-      : [...tags];
+    // //단어 를 찾아 태그로 추출하고 나머지는 일반 텍스트로
+  const lastWord = inputText.split(" ").pop();
+  let plainText = inputText.trim();
+  const finalTags = [...tags];
+    
+  if (lastWord.startsWith("//") && lastWord.length > 2) {
+    finalTags.push(lastWord.slice(2));
+    plainText = inputText.slice(0, inputText.length - lastWord.length).trim();
+  }
 
     setMessages((prev) => [
       ...prev,
-      { role: "user", tags: finalTags, image: image || null, text: "" },
+      {
+        role: "user",
+        tags: finalTags.length > 0 ? finalTags : [],
+        image: image || null,
+        text: plainText,
+      },
     ]);
     setTags([]);
     setInputText("");
