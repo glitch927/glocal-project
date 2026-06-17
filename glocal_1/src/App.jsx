@@ -92,20 +92,20 @@ export default function RecipeChat() {
     setTheme((prev) => (prev === "light" ? "dark" : "light"));
 
   const handleKeyDown = (e) => {
-  if (e.key === " ") {
-    const trimmed = inputText.trim();
-    if (trimmed.startsWith("//")) {
-      e.preventDefault();
-      const tagLabel = trimmed.slice(2).trim();
-      if (tagLabel) {
-        setTags((prev) => [...prev, tagLabel]);
-        setInputText("");
+    if (e.key === " ") {
+      const trimmed = inputText.trim();
+      if (trimmed.startsWith("//")) {
+        e.preventDefault();
+        const tagLabel = trimmed.slice(2).trim();
+        if (tagLabel) {
+          setTags((prev) => [...prev, tagLabel]);
+          setInputText("");
+        }
       }
+    } else if (e.key === "Backspace" && inputText === "" && tags.length > 0) {
+      setTags((prev) => prev.slice(0, -1));
     }
-  } else if (e.key === "Backspace" && inputText === "" && tags.length > 0) {
-    setTags((prev) => prev.slice(0, -1));
-  }
-};
+  };
 
   const removeTag = (idx) =>
     setTags((prev) => prev.filter((_, i) => i !== idx));
