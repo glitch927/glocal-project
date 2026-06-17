@@ -8,11 +8,7 @@ function Tag({ label, onRemove }) {
   return (
     <span className="tag-item">
       {label}
-      <button
-        className="tag-remove"
-        onClick={onRemove}
-        aria-label={`${label} 태그 삭제`}
-      >
+      <button className="tag-remove" onClick={onRemove} aria-label={`${label} 태그 삭제`}>
         ×
       </button>
     </span>
@@ -27,11 +23,7 @@ function ImagePreview({ src, name, onRemove }) {
     <div className="image-preview-wrap">
       <div className="image-preview-inner">
         <img className="image-preview-thumb" src={src} alt={name} />
-        <button
-          className="image-preview-remove"
-          onClick={onRemove}
-          aria-label="이미지 삭제"
-        >
+        <button className="image-preview-remove" onClick={onRemove} aria-label="이미지 삭제">
           ×
         </button>
       </div>
@@ -48,12 +40,14 @@ function ChatBubble({ msg }) {
     <div className={`bubble-row ${isUser ? "user" : "ai"}`}>
       {!isUser && <div className="ai-avatar">AI</div>}
       <div className={`bubble ${isUser ? "user" : "ai"}`}>
-        {msg.tags && msg.tags.length > 0 && (
-          <div className="bubble-tags">
-            {msg.tags.map((t, i) => (
-              <span key={i} className="bubble-tag-item">{t}</span>
-            ))}
-          </div>
+        {msg.tokens && msg.tokens.length > 0 && (
+          <span className="bubble-tokens">
+            {msg.tokens.map((token, i) =>
+              token.type === "tag"
+                ? <span key={i} className="bubble-tag-item">{token.value}</span>
+                : <span key={i}>{token.value}</span>
+            )}
+          </span>
         )}
         {msg.image && (
           <img className="bubble-image" src={msg.image} alt="업로드 이미지" />
@@ -76,7 +70,7 @@ export default function RecipeChat() {
     },
   ]);
   const [inputText, setInputText] = useState("");
-  const [tags, setTags] = useState([]);
+  const [tokens, setTokens] = useState([]);
   const [image, setImage] = useState(null);
   const [imageName, setImageName] = useState("");
 
@@ -97,16 +91,28 @@ export default function RecipeChat() {
       if (lastWord.startsWith("//") && lastWord.length > 2) {
         e.preventDefault();
         const tagLabel = lastWord.slice(2);
-        setTags((prev) => [...prev, tagLabel]);
-        setInputText(inputText.slice(0, inputText.length - lastWord.length).trimStart());
+        const beforeTag = inputText.slice(0, inputText.length - lastWord.length);
+        const newTokens = [...tokens];
+        if (beforeTag.trim()) newTokens.push({ type: "text", value: beforeTag.trimStart() });
+        newTokens.push({ type: "tag", value: tagLabel });
+        setTokens(newTokens);
+        setInputText("");
       }
-    } else if (e.key === "Backspace" && inputText === "" && tags.length > 0) {
-      setTags((prev) => prev.slice(0, -1));
+    } else if (e.key === "Backspace" && inputText === "" && tokens.length > 0) {
+      const last = tokens[tokens.length - 1];
+      if (last.type === "tag") {
+        setTokens((prev) => prev.slice(0, -1));
+      } else {
+        const newTokens = [...tokens];
+        newTokens[newTokens.length - 1] = {
+          ...last,
+          value: last.value.slice(0, -1),
+        };
+        if (newTokens[newTokens.length - 1].value === "") newTokens.pop();
+        setTokens(newTokens);
+      }
     }
   };
-
-  const removeTag = (idx) =>
-    setTags((prev) => prev.filter((_, i) => i !== idx));
 
   const handleImage = (e) => {
     const file = e.target.files[0];
@@ -120,31 +126,25 @@ export default function RecipeChat() {
     e.target.value = "";
   };
 
-  const canSend = tags.length > 0 || !!image || inputText.trim().length > 0;
+  const canSend = tokens.length > 0 || !!image || inputText.trim().length > 0;
 
   const handleSend = () => {
     if (!canSend) return;
 
-    // //단어 를 찾아 태그로 추출하고 나머지는 일반 텍스트로
-  const lastWord = inputText.split(" ").pop();
-  let plainText = inputText.trim();
-  const finalTags = [...tags];
-    
-  if (lastWord.startsWith("//") && lastWord.length > 2) {
-    finalTags.push(lastWord.slice(2));
-    plainText = inputText.slice(0, inputText.length - lastWord.length).trim();
-  }
+    const finalTokens = [...tokens];
+    if (inputText.trim()) finalTokens.push({ type: "text", value: inputText.trim() });
+
+    const tagValues = finalTokens.filter((t) => t.type === "tag").map((t) => t.value);
 
     setMessages((prev) => [
       ...prev,
       {
         role: "user",
-        tags: finalTags.length > 0 ? finalTags : [],
+        tokens: finalTokens,
         image: image || null,
-        text: plainText,
       },
     ]);
-    setTags([]);
+    setTokens([]);
     setInputText("");
     setImage(null);
     setImageName("");
@@ -155,9 +155,11 @@ export default function RecipeChat() {
         {
           role: "ai",
           text:
-            finalTags.length > 0
-              ? `${finalTags.join(", ")} (으)로 만들 수 있는 레시피를 찾고 있어요... 🔍 (Gemini API 연동 후 실제 추천이 표시됩니다)`
-              : "사진을 분석하고 있어요... 📷 (Gemini Vision API 연동 후 재료 인식 결과가 표시됩니다)",
+            tagValues.length > 0
+              ? `${tagValues.join(", ")} (으)로 만들 수 있는 레시피를 찾고 있어요... 🔍 (Gemini API 연동 후 실제 추천이 표시됩니다)`
+              : image
+              ? "사진을 분석하고 있어요... 📷 (Gemini Vision API 연동 후 재료 인식 결과가 표시됩니다)"
+              : `답변을 생성하고 있어요... (Gemini API 연동 후 실제 응답이 표시됩니다)`,
         },
       ]);
     }, 800);
@@ -165,7 +167,6 @@ export default function RecipeChat() {
 
   return (
     <div className="page-wrapper" data-theme={theme}>
-      {/* 다크모드 토글 */}
       <button className="theme-toggle" onClick={toggleTheme}>
         {theme === "light" ? "🌙 다크 모드" : "☀️ 라이트 모드"}
       </button>
@@ -176,9 +177,7 @@ export default function RecipeChat() {
           <div className="chat-header-icon">🍽️</div>
           <div>
             <div className="chat-header-title">레시피 AI</div>
-            <div className="chat-header-subtitle">
-              재료를 입력하면 레시피를 추천해드려요
-            </div>
+            <div className="chat-header-subtitle">재료를 입력하면 레시피를 추천해드려요</div>
           </div>
         </div>
 
@@ -196,53 +195,32 @@ export default function RecipeChat() {
             <ImagePreview
               src={image}
               name={imageName}
-              onRemove={() => {
-                setImage(null);
-                setImageName("");
-              }}
+              onRemove={() => { setImage(null); setImageName(""); }}
             />
           )}
 
           <div className="input-row">
-            {/* + 버튼 */}
-            <button
-              className="btn-plus"
-              onClick={() => fileRef.current.click()}
-              aria-label="이미지 첨부"
-            >
+            <button className="btn-plus" onClick={() => fileRef.current.click()} aria-label="이미지 첨부">
               +
             </button>
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/*"
-              style={{ display: "none" }}
-              onChange={handleImage}
-            />
+            <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleImage} />
 
-            {/* 태그 + 텍스트 입력 박스 */}
-            <div
-              className="input-box"
-              onClick={() => inputRef.current.focus()}
-            >
-              {tags.map((t, i) => (
-                <Tag key={i} label={t} onRemove={() => removeTag(i)} />
-              ))}
+            <div className="input-box" onClick={() => inputRef.current.focus()}>
+              {tokens.map((token, i) =>
+                token.type === "tag"
+                  ? <Tag key={i} label={token.value} onRemove={() => setTokens((prev) => prev.filter((_, j) => j !== i))} />
+                  : <span key={i} className="input-text-token">{token.value}</span>
+              )}
               <input
                 ref={inputRef}
                 className="input-text-field"
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder={
-                  tags.length === 0 && !image
-                    ? "메시지를 입력하세요. 재료는 //당근 처럼 입력하세요."
-                    : ""
-                }
+                placeholder={tokens.length === 0 && !image ? "메시지를 입력하세요. 재료는 //당근 처럼 입력하세요." : ""}
               />
             </div>
 
-            {/* 전송 버튼 */}
             <button
               className={`btn-send ${canSend ? "active" : "disabled"}`}
               onClick={handleSend}
